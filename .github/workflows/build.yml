@@ -1,0 +1,47 @@
+name: Build Mum Florence APK
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack the project zip
+        run: |
+          ZIP=$(ls MumFlorence*.zip | head -n 1)
+          echo "Using $ZIP"
+          mkdir -p work
+          unzip -q -o "$ZIP" -d work
+          ls work/MumFlorence
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Download voice models (bundled into the app)
+        working-directory: work/MumFlorence
+        run: |
+          mkdir -p app/src/main/assets
+          curl -L -o m.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+          D=$(unzip -Z1 m.zip | head -1 | cut -d/ -f1)
+          unzip -q m.zip
+          mv "$D" app/src/main/assets/model
+          curl -L -o s.zip https://alphacephei.com/vosk/models/vosk-model-spk-0.4.zip
+          D=$(unzip -Z1 s.zip | head -1 | cut -d/ -f1)
+          unzip -q s.zip
+          mv "$D" app/src/main/assets/spk
+          ls app/src/main/assets/model app/src/main/assets/spk
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build the APK
+        working-directory: work/MumFlorence
+        run: gradle assembleDebug --no-daemon
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Mum Florence (build ${{ github.run_number }})
+          files: work/MumFlorence/app/build/outputs/apk/debug/app-debug.apk
